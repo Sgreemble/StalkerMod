@@ -1,0 +1,335 @@
+--[[
+Quadrupedal Stalker - Beta 1
+Made By Sgreemble!
+DOORS Entity Spawner V2  
+El modelo Stalkeling se crea automáticamente.
+]]
+--// CONFIGURACION
+local ENTITY_NAME = "Quadrupedal Stalker"
+local MODEL_NAME = "Stalkeling :D"
+local TEXTURE_ID = "rbxassetid://105597926133276"
+local DASH_SOUND_ID = "rbxassetid://73763450187381"
+local MIN_APPEARANCE_TIME = 60
+local MAX_APPEARANCE_TIME = 70
+local SPAWN_DISTANCE = 35
+local DASH_DISTANCE = 30
+local DASH_COOLDOWN = 2
+local DASH_TIME = 0.35
+local DAMAGE_RANGE = 2.5
+local DAMAGE_AMOUNT = 125
+local CRUCIFIX_RANGE = 3
+--// SERVICIOS
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local Player = Players.LocalPlayer
+local RandomGenerator = Random.new()
+local ENCOUNTER_TIME = RandomGenerator:NextNumber(MIN_APPEARANCE_TIME, MAX_APPEARANCE_TIME)
+--// LIMPIEZA DE UNA EJECUCION ANTERIOR
+if getgenv().QuadrupedalStalkerCleanup then
+	pcall(getgenv().QuadrupedalStalkerCleanup)
+end
+local Running = true
+local Connections = {}
+local ActiveTweens = {}
+local function TrackConnection(connection)
+	table.insert(Connections, connection)
+	return connection
+end
+local function Cleanup()
+	Running = false
+	for _, connection in ipairs(Connections) do
+		pcall(function()
+			connection:Disconnect()
+		end)
+	end
+	for _, tween in ipairs(ActiveTweens) do
+		pcall(function()
+			tween:Cancel()
+		end)
+	end
+	if getgenv().QuadrupedalStalkerCleanup == Cleanup then
+		getgenv().QuadrupedalStalkerCleanup = nil
+	end
+end
+getgenv().QuadrupedalStalkerCleanup = Cleanup
+--// PERSONAJE
+local function GetCharacter()
+	local character = Player.Character
+	if not character then
+		return nil
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not root or humanoid.Health <= 0 then
+		return nil
+	end
+	return character, humanoid, root
+end
+--// CREAR STALKELING AUTOMATICAMENTE
+local function CreateStalkeling()
+	local model = Instance.new("Model")
+	model.Name = MODEL_NAME
+	local root = Instance.new("Part")
+	root.Name = "StalkerRoot"
+	root.Size = Vector3.new(2, 2, 2)
+	root.Transparency = 1
+	root.Anchored = true
+	root.CanCollide = false
+	root.CanTouch = false
+	root.CanQuery = false
+	root.CastShadow = false
+	root.Parent = model
+	model.PrimaryPart = root
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "StalkerAttachment"
+	attachment.Parent = root
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Name = "StalkerTexture"
+	emitter.Texture = TEXTURE_ID
+	emitter.Lifetime = NumberRange.new(0.1, 0.1)
+	emitter.Rate = 60
+	emitter.Speed = NumberRange.new(0, 0)
+	emitter.Shape = Enum.ParticleEmitterShape.Sphere
+	emitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
+	emitter.LockedToPart = true
+	emitter.Rotation = NumberRange.new(0, 0)
+	emitter.RotSpeed = NumberRange.new(0, 0)
+	emitter.SpreadAngle = Vector2.new(0, 0)
+	emitter.LightInfluence = 0
+	emitter.ZOffset = 1
+	emitter.Size = NumberSequence.new(5)
+	emitter.Transparency = NumberSequence.new(0)
+	emitter.Parent = attachment
+	-- Sonido de dash
+	local dashSound = Instance.new("Sound")
+	dashSound.Name = "DashSound"
+	dashSound.SoundId = DASH_SOUND_ID
+	dashSound.Volume = 1
+	dashSound.PlaybackSpeed = 1
+	dashSound.Parent = root
+	model.Parent = Workspace
+	return model, root, emitter, dashSound
+end
+local StalkerModel, StalkerRoot, StalkerEmitter, DashSound = CreateStalkeling()
+--// CARGAR ENTITY SPAWNER V2
+local Spawner
+local success, result = pcall(function()
+	return loadstring(game:HttpGet(
+		"https://raw.githubusercontent.com/RegularVynixu/DOORS-Entity-Spawner/main/init.luau"
+	))()
+end)
+if success then
+	Spawner = result
+end
+if not Spawner or not Spawner.Create then
+	StalkerModel:Destroy()
+	Cleanup()
+	warn("[Quadrupedal Stalker] No se pudo cargar Entity Spawner V2.")
+	return
+end
+--// CONFIGURACION DE LA ENTIDAD
+local Entity
+local createSuccess, createResult = pcall(function()
+	return Spawner:Create({
+		Entity = {
+			Name = ENTITY_NAME,
+			Asset = StalkerModel,
+			HeightOffset = 0
+		},
+		Movement = {
+			Speed = 0,
+			Delay = 0,
+			Reversed = false
+		},
+		Damage = {
+			Enabled = true,
+			IgnoreHiding = false,
+			Range = DAMAGE_RANGE,
+			Amount = DAMAGE_AMOUNT
+		},
+		Rebounding = {
+			Enabled = false,
+			Type = "Ambush",
+			Min = 2,
+			Max = 4,
+			Delay = 2
+		},
+		Lights = {
+			Flicker = {
+				Enabled = false,
+				Duration = 1
+			},
+			Shatter = false,
+			Repair = false
+		},
+		Earthquake = {
+			Enabled = false
+		},
+		CameraShake = {
+			Enabled = false,
+			Values = {1.5, 20, 0.1, 1},
+			Range = 35
+		},
+		Crucifixion = {
+			Type = "Guiding",
+			Enabled = true,
+			Range = CRUCIFIX_RANGE,
+			Resist = false,
+			Break = true
+		},
+		Death = {
+			Type = "Guiding",
+			Hints = {
+				"You died to something i couldn't quite identify...",
+				"I'm not sure what that thing was, or where it came from.",
+				"I don't remember seeing it approach.",
+				"Perhaps it had been following you for longer than i realized."
+			},
+			Cause = ENTITY_NAME
+		}
+	})
+end)
+if not createSuccess or not createResult then
+	StalkerModel:Destroy()
+	Cleanup()
+	warn("[Quadrupedal Stalker] No se pudo crear la entidad:", createResult)
+	return
+end
+Entity = createResult
+--// POSICION INICIAL
+local function GetInitialPosition()
+	local _, _, root = GetCharacter()
+	if not root then
+		return nil
+	end
+	return root.CFrame * CFrame.new(0, 0, SPAWN_DISTANCE)
+end
+local initialCFrame = GetInitialPosition()
+if initialCFrame then
+	StalkerModel:PivotTo(initialCFrame)
+end
+--// INICIAR EL ENTITY SPAWNER
+local runSuccess, runError = pcall(function()
+	Entity:Run()
+end)
+if not runSuccess then
+	Entity:Despawn()
+	Cleanup()
+	warn("[Quadrupedal Stalker] Error al iniciar:", runError)
+	return
+end
+--// MOVIMIENTO PERSONALIZADO
+local IsDashing = false
+local LastDash = 0
+local LastLookState = false
+local StartTime = os.clock()
+local function IsPlayerLookingAtStalker(root)
+	local camera = Workspace.CurrentCamera
+	if not camera or not StalkerRoot or not StalkerRoot.Parent then
+		return false
+	end
+	local offset = StalkerRoot.Position - camera.CFrame.Position
+	if offset.Magnitude <= 0 then
+		return true
+	end
+	local direction = offset.Unit
+	local dot = camera.CFrame.LookVector:Dot(direction)
+	if dot < 0.65 then
+		return false
+	end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = {
+		Player.Character,
+		StalkerModel
+	}
+	local result = Workspace:Raycast(
+		camera.CFrame.Position,
+		offset,
+		params
+	)
+	return result == nil
+end
+local function SmoothDash(targetCFrame)
+	if IsDashing or not StalkerModel.Parent then
+		return
+	end
+	IsDashing = true
+	-- Reproducir sonido de dash
+	if DashSound then
+		DashSound:Play()
+	end
+	local startCFrame = StalkerModel:GetPivot()
+	local elapsed = 0
+	while Running and elapsed < DASH_TIME do
+		local dt = RunService.Heartbeat:Wait()
+		elapsed += dt
+		local alpha = math.clamp(elapsed / DASH_TIME, 0, 1)
+		alpha = alpha * alpha * (3 - 2 * alpha)
+		if not StalkerModel.Parent then
+			break
+		end
+		StalkerModel:PivotTo(startCFrame:Lerp(targetCFrame, alpha))
+	end
+	if StalkerModel.Parent then
+		StalkerModel:PivotTo(targetCFrame)
+	end
+	IsDashing = false
+end
+local function GetDashTarget(root)
+	local currentPosition = StalkerModel:GetPivot().Position
+	local playerPosition = root.Position
+	local towardPlayer = playerPosition - currentPosition
+	local distance = towardPlayer.Magnitude
+	if distance < 0.1 then
+		return StalkerModel:GetPivot()
+	end
+	local moveDistance = math.min(
+		DASH_DISTANCE,
+		math.max(0, distance - 2)
+	)
+	local newPosition = currentPosition + towardPlayer.Unit * moveDistance
+	return CFrame.lookAt(
+		newPosition,
+		playerPosition
+	)
+end
+--// BUCLE PRINCIPAL
+task.spawn(function()
+	while Running do
+		if os.clock() - StartTime >= ENCOUNTER_TIME then
+			break
+		end
+		local character, humanoid, root = GetCharacter()
+		if character and root and StalkerModel.Parent then
+			local looking = IsPlayerLookingAtStalker(root)
+			if looking then
+				LastLookState = true
+			else
+				if os.clock() - LastDash >= DASH_COOLDOWN and not IsDashing then
+					LastDash = os.clock()
+					local target = GetDashTarget(root)
+					task.spawn(function()
+						SmoothDash(target)
+					end)
+				end
+				LastLookState = false
+			end
+		end
+		task.wait(0.05)
+	end
+	--// FINALIZAR ENCUENTRO
+	Cleanup()
+	if Entity then
+		pcall(function()
+			Entity:Despawn()
+		end)
+	end
+	if StalkerModel and StalkerModel.Parent then
+		StalkerModel:Destroy()
+	end
+	print("[Quadrupedal Stalker] Encuentro finalizado. Duración: " .. math.floor(ENCOUNTER_TIME) .. " segundos.")
+end)
+print("[Quadrupedal Stalker] Beta 1 iniciada. Duración del encuentro: " .. math.floor(ENCOUNTER_TIME) .. " segundos.")
